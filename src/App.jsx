@@ -1,116 +1,110 @@
-import React, { useState, useEffect } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { useState, useEffect } from 'react'
+import supabase from './lib/supabase'
 import Header from './components/Header'
-import Auth from './components/Auth'
-import CarList from './components/CarList'
-import CarDetail from './components/CarDetail'
-import ReviewForm from './components/ReviewForm'
-import { Car } from 'lucide-react'
+import LoginPage from './pages/LoginPage'
+import BrowsePage from './pages/BrowsePage'
+import EntryDetailPage from './pages/EntryDetailPage'
+import CreateEntryPage from './pages/CreateEntryPage'
+import ProfilePage from './pages/ProfilePage'
 
-const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
-
-function App() {
+export default function App() {
   const [session, setSession] = useState(null)
-  const [currentView, setCurrentView] = useState('home')
-  const [selectedCar, setSelectedCar] = useState(null)
-  const [editingReview, setEditingReview] = useState(null)
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState('login')
+  const [currentPageProps, setCurrentPageProps] = useState({})
 
+  // Auth state listener
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-    })
+    const initAuth = async () => {
+      try {
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession()
+        if (error) throw error
+        
+        if (currentSession) {
+          setSession(currentSession)
+          setUser(currentSession.user)
+          setCurrentPage('browse')
+        } else {
+          setCurrentPage('login')
+        }
+      } catch (err) {
+        console.error('Auth error:', err)
+        setCurrentPage('login')
+      } finally {
+        setLoading(false)
+      }
+    }
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
+    initAuth()
 
-    return () => subscription.unsubscribe()
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, newSession) => {
+        if (newSession) {
+          setSession(newSession)
+          setUser(newSession.user)
+          setCurrentPage('browse')
+        } else {
+          setSession(null)
+          setUser(null)
+          setCurrentPage('login')
+        }
+      }
+    )
+
+    return () => {
+      subscription?.unsubscribe()
+    }
   }, [])
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    setSession(null)
-    setCurrentView('home')
-    setSelectedCar(null)
-    setEditingReview(null)
+  const handleNavigate = (page, props = {}) => {
+    setCurrentPage(page)
+    setCurrentPageProps(props || {})
   }
 
-  const handleCarSelect = (car) => {
-    setSelectedCar(car)
-    setCurrentView('detail')
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-black to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400 font-semibold">Loading meetEVs...</p>
+        </div>
+      </div>
+    )
   }
 
-  const handleBackToList = () => {
-    setSelectedCar(null)
-    setCurrentView('home')
-    setEditingReview(null)
+  // Not authenticated - show login
+  if (!session) {
+    return (
+      <LoginPage onNavigate={handleNavigate} />
+    )
   }
 
-  const handleEditReview = (review) => {
-    setEditingReview(review)
-    setCurrentView('review')
-  }
-
-  const handleReviewComplete = () => {
-    setEditingReview(null)
-    setCurrentView('detail')
-  }
-
+  // Authenticated - show app with header
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <Header 
-        session={session} 
-        onLogout={handleLogout}
-        onHomeClick={() => {
-          setCurrentView('home')
-          setSelectedCar(null)
-          setEditingReview(null)
-        }}
-      />
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-black to-slate-900">
+      <Header onNavigate={handleNavigate} user={user} />
       
-      <main className="container mx-auto px-4 py-8">
-        {!session ? (
-          <div className="max-w-md mx-auto">
-            <div className="text-center mb-8">
-              <Car className="w-16 h-16 mx-auto mb-4 text-blue-400" />
-              <h1 className="text-4xl font-bold mb-2">meetEVs</h1>
-              <p className="text-gray-400">The future of electric vehicles</p>
-            </div>
-            <Auth />
-          </div>
-        ) : (
-          <>
-            {currentView === 'home' && (
-              <CarList onCarSelect={handleCarSelect} supabase={supabase} />
-            )}
-            
-            {currentView === 'detail' && selectedCar && (
-              <CarDetail 
-                car={selectedCar} 
-                onBack={handleBackToList}
-                onEditReview={handleEditReview}
-                currentUserId={session.user.id}
-                supabase={supabase}
-              />
-            )}
-            
-            {currentView === 'review' && (
-              <ReviewForm
-                car={selectedCar}
-                review={editingReview}
-                onComplete={handleReviewComplete}
-                onCancel={() => setCurrentView('detail')}
-                currentUserId={session.user.id}
-                supabase={supabase}
-              />
-            )}
-          </>
-        )}
-      </main>
+      {currentPage === 'browse' && (
+        <BrowsePage onNavigate={handleNavigate} user={user} />
+      )}
+      
+      {currentPage === 'entry-detail' && (
+        <EntryDetailPage 
+          onNavigate={handleNavigate} 
+          user={user}
+          entryId={currentPageProps.entryId}
+        />
+      )}
+      
+      {currentPage === 'create-entry' && (
+        <CreateEntryPage onNavigate={handleNavigate} user={user} />
+      )}
+      
+      {currentPage === 'profile' && (
+        <ProfilePage onNavigate={handleNavigate} user={user} />
+      )}
     </div>
   )
 }
-
-export default App
