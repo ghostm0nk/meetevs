@@ -203,17 +203,6 @@ export default function LoginPage({ onNavigate }) {
               </button>
             </p>
           </div>
-
-          {/* Info */}
-          <div className="mt-8 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30">
-            <p className="text-gray-300 text-xs">
-              <span className="font-semibold text-blue-300">Demo credentials:</span>
-              <br />
-              Email: demo@evs.com
-              <br />
-              Password: demo123456
-            </p>
-          </div>
         </div>
       </div>
     </div>
